@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"os"
@@ -56,43 +57,76 @@ func main() {
 	fmt.Println("Full comprehensive documentation generated successfully!")
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprintf(w, `
-			<div style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px;">
-				<h1>WhatsApp Web API Extractor</h1>
-				<p>All packages have been extracted successfully.</p>
-				<br><br>
-				<a href="/download" style="font-size: 18px; padding: 12px 24px; background: #007bff; color: white; text-decoration: none; border-radius: 8px;">
-					Download whatsmeow_full_functions.txt
-				</a>
-			</div>
-		`)
-	})
-
-	http.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("Download requested by browser...")
-		
-		filePath := "whatsmeow_full_functions.txt"
-		
-		// چیک کریں کہ فائل موجود ہے یا نہیں
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			http.Error(w, "File not found", http.StatusNotFound)
+		// فائل کو ریڈ کرنا
+		content, err := os.ReadFile("whatsmeow_full_functions.txt")
+		if err != nil {
+			http.Error(w, "File not found or still generating", http.StatusInternalServerError)
 			return
 		}
 
-		// ہیڈرز جو کلاؤڈ پراکسیز (جیسے Railway) اور کروم پر مسئلہ نہیں کرتے
-		w.Header().Set("Content-Disposition", "attachment; filename=whatsmeow_full_functions.txt")
-		// اسے ٹیکسٹ کی بجائے راؤ ڈیٹا کے طور پر بھیجیں تاکہ کمپریشن کا مسئلہ نہ آئے
-		w.Header().Set("Content-Type", "application/octet-stream")
-		// کیشے کو ڈس ایبل کریں
-		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-		w.Header().Set("Pragma", "no-cache")
-		w.Header().Set("Expires", "0")
+		// HTML اور JavaScript کا کوڈ تاکہ سکرین پر نظر آئے اور کاپی ہو سکے
+		html := `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whatsmeow Extracted Docs</title>
+    <style>
+        body { font-family: Consolas, monospace; background-color: #1e1e1e; color: #d4d4d4; margin: 0; padding: 15px; }
+        .header { 
+            display: flex; justify-content: space-between; align-items: center; 
+            background: #333; padding: 15px; border-radius: 8px; 
+            margin-bottom: 20px; position: sticky; top: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        h2 { margin: 0; color: #fff; font-size: 16px; font-family: Arial, sans-serif; }
+        button { 
+            background: #007bff; color: white; border: none; 
+            padding: 10px 20px; font-size: 14px; border-radius: 5px; 
+            cursor: pointer; font-weight: bold; transition: 0.3s;
+        }
+        button:hover { background: #0056b3; }
+        pre { 
+            background: #2d2d2d; padding: 15px; border-radius: 8px; 
+            overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; 
+            font-size: 13px; line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>Whatsmeow Functions</h2>
+        <button id="copyBtn" onclick="copyDoc()">Copy All Text</button>
+    </div>
+    
+    <pre id="docContent">%s</pre>
 
-		// Go کا بلٹ ان فنکشن جو سٹریمنگ اور سائز کو خود ہینڈل کرے گا
-		http.ServeFile(w, r, filePath)
+    <script>
+        function copyDoc() {
+            const text = document.getElementById("docContent").innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.getElementById('copyBtn');
+                btn.innerText = "Copied! ✔";
+                btn.style.background = "#28a745";
+                
+                // 3 سیکنڈ بعد بٹن دوبارہ نارمل ہو جائے گا
+                setTimeout(() => {
+                    btn.innerText = "Copy All Text";
+                    btn.style.background = "#007bff";
+                }, 3000);
+            }).catch(err => {
+                alert("Copy failed! Please select manually.");
+            });
+        }
+    </script>
+</body>
+</html>`
+
+		// ٹیکسٹ کو HTML کے لیے Safe بنانا تاکہ < > والے ٹیگز خراب نہ ہوں
+		safeContent := template.HTMLEscapeString(string(content))
 		
-		fmt.Println("File sent to proxy successfully!")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprintf(w, html, safeContent)
 	})
 
 	port := os.Getenv("PORT")
