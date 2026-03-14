@@ -1,9 +1,9 @@
-# Go کا 1.24 ورژن استعمال کریں
-FROM golang:1.24-alpine
+# Go کا 1.25 ورژن استعمال کریں تاکہ whatsmeow کا لیٹیسٹ ورژن انسٹال ہو سکے
+FROM golang:1.25-alpine
 
 WORKDIR /app
 
-# Git انسٹال کرنا ضروری ہے تاکہ گو ماڈیولز ڈاؤن لوڈ ہو سکیں
+# Git انسٹال کرنا ضروری ہے
 RUN apk add --no-cache git
 
 # ماڈیول انیشلائزیشن
