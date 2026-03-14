@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"html/template"
 	"log"
@@ -14,57 +15,103 @@ func generateDocs() error {
 	fileName := "whatsmeow_full_functions.txt"
 	file, err := os.Create(fileName)
 	if err != nil {
-		return err
+		return fmt.Errorf("فائل بنانے میں مسئلہ: %v", err)
 	}
 	defer file.Close()
 
+	fmt.Println("\n🚀 ----------------------------------------------------")
+	fmt.Println("🚀 STEP 1: واٹس میو کے تمام پیکجز تلاش کیے جا رہے ہیں...")
+	fmt.Println("🚀 ----------------------------------------------------")
+
+	// 1. پیکجز کی لسٹ نکالنا (ساتھ میں ایرر کیپچر کرنا)
 	cmdList := exec.Command("go", "list", "go.mau.fi/whatsmeow/...")
+	var listErr bytes.Buffer
+	cmdList.Stderr = &listErr
 	outputList, err := cmdList.Output()
+
 	if err != nil {
-		return fmt.Errorf("failed to list packages: %v", err)
+		fmt.Printf("❌ ایرر 'go list' کمانڈ چلانے میں: %v\n", err)
+		fmt.Printf("❌ اندرونی ایرر (STDERR): %s\n", listErr.String())
+		return fmt.Errorf("پیکجز فائنڈ نہیں ہوئے")
 	}
 
-	packages := strings.Split(strings.TrimSpace(string(outputList)), "\n")
+	packagesStr := strings.TrimSpace(string(outputList))
+	if packagesStr == "" {
+		fmt.Println("⚠️ وارننگ: کوئی پیکج نہیں ملا، لسٹ بالکل خالی ہے!")
+		return fmt.Errorf("empty package list")
+	}
 
-	for _, pkg := range packages {
+	packages := strings.Split(packagesStr, "\n")
+	fmt.Printf("✅ زبردست! ٹوٹل %d پیکجز مل گئے ہیں۔\n\n", len(packages))
+
+	fmt.Println("🚀 ----------------------------------------------------")
+	fmt.Println("🚀 STEP 2: ہر پیکج کے فنکشنز ایکسٹریکٹ کیے جا رہے ہیں...")
+	fmt.Println("🚀 ----------------------------------------------------\n")
+
+	// 2. ہر پیکج پر لوپ لگانا اور ڈیٹا نکالنا
+	for i, pkg := range packages {
+		pkg = strings.TrimSpace(pkg)
 		if pkg == "" {
 			continue
 		}
-		
+
+		fmt.Printf("⏳ [%d/%d] پروسیسنگ ہو رہی ہے: %s\n", i+1, len(packages), pkg)
+
 		cmdDoc := exec.Command("go", "doc", "-all", pkg)
-		outputDoc, err := cmdDoc.CombinedOutput()
+		var docErr bytes.Buffer
+		cmdDoc.Stderr = &docErr
+		outputDoc, err := cmdDoc.Output()
+
 		if err != nil {
+			fmt.Printf("  ❌ فیل ہو گیا! ایرر: %v\n", err)
+			fmt.Printf("  ❌ وجہ (STDERR): %s\n", docErr.String())
 			continue
 		}
-		
-		file.WriteString("========================================================\n")
-		file.WriteString(fmt.Sprintf("PACKAGE: %s\n", pkg))
-		file.WriteString("========================================================\n\n")
-		file.Write(outputDoc)
-		file.WriteString("\n\n\n")
+
+		if len(outputDoc) == 0 {
+			fmt.Printf("  ⚠️ کوئی پبلک فنکشن یا سٹرکچر نہیں ملا اس پیکج میں۔\n")
+		} else {
+			fmt.Printf("  ✅ کامیابی! اس پیکج سے %d بائٹس کا ڈیٹا نکالا گیا۔\n", len(outputDoc))
+			
+			// فائل میں لکھنا
+			file.WriteString("========================================================\n")
+			file.WriteString(fmt.Sprintf("PACKAGE: %s\n", pkg))
+			file.WriteString("========================================================\n\n")
+			file.Write(outputDoc)
+			file.WriteString("\n\n\n")
+		}
 	}
 
+	fmt.Println("\n🎉 سب کچھ مکمل ہو گیا! فائل ریڈی ہے۔")
 	return nil
 }
 
 func main() {
-	fmt.Println("Starting Railway Server...")
-	fmt.Println("Hunting down EVERY SINGLE package inside whatsmeow...")
-	
+	fmt.Println("=================================================")
+	fmt.Println("   WHATSMEOW EXTRACTOR SERVER STARTING...        ")
+	fmt.Println("=================================================")
+
+	// فنکشنز ایکسٹریکٹ کرنا سٹارٹ کریں
 	if err := generateDocs(); err != nil {
-		log.Fatalf("Error generating docs: %v", err)
+		fmt.Printf("\n🚨 خطرہ: ڈاکیومنٹیشن جنریٹ کرنے میں بڑا مسئلہ آ گیا: %v\n", err)
 	}
-	fmt.Println("Full comprehensive documentation generated successfully!")
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// فائل کو ریڈ کرنا
 		content, err := os.ReadFile("whatsmeow_full_functions.txt")
-		if err != nil {
-			http.Error(w, "File not found or still generating", http.StatusInternalServerError)
+		
+		// اگر فائل موجود نہیں یا بالکل خالی ہے
+		if err != nil || len(content) == 0 {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			fmt.Fprintf(w, `
+				<body style="background:#1e1e1e; color:red; font-family:Arial; text-align:center; padding-top:50px;">
+					<h2>🚨 Error: File is empty or not generated yet!</h2>
+					<p>پلیز Railway کے لاگز (Logs) چیک کریں کہ کیا مسئلہ آیا ہے۔</p>
+				</body>
+			`)
 			return
 		}
 
-		// HTML اور JavaScript کا کوڈ تاکہ سکرین پر نظر آئے اور کاپی ہو سکے
 		html := `
 <!DOCTYPE html>
 <html lang="en">
@@ -98,7 +145,6 @@ func main() {
         <h2>Whatsmeow Functions</h2>
         <button id="copyBtn" onclick="copyDoc()">Copy All Text</button>
     </div>
-    
     <pre id="docContent">%s</pre>
 
     <script>
@@ -108,8 +154,6 @@ func main() {
                 const btn = document.getElementById('copyBtn');
                 btn.innerText = "Copied! ✔";
                 btn.style.background = "#28a745";
-                
-                // 3 سیکنڈ بعد بٹن دوبارہ نارمل ہو جائے گا
                 setTimeout(() => {
                     btn.innerText = "Copy All Text";
                     btn.style.background = "#007bff";
@@ -122,9 +166,7 @@ func main() {
 </body>
 </html>`
 
-		// ٹیکسٹ کو HTML کے لیے Safe بنانا تاکہ < > والے ٹیگز خراب نہ ہوں
 		safeContent := template.HTMLEscapeString(string(content))
-		
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprintf(w, html, safeContent)
 	})
@@ -135,6 +177,6 @@ func main() {
 	}
 
 	address := "0.0.0.0:" + port
-	fmt.Printf("Server is running on %s\n", address)
+	fmt.Printf("\n🌐 سرور اس پورٹ پر چل رہا ہے: %s\n", address)
 	log.Fatal(http.ListenAndServe(address, nil))
 }
