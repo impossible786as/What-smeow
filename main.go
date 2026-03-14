@@ -9,6 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	// یہ بلینک امپورٹ گو کو بتائے گا کہ whatsmeow کو ڈیلیٹ نہیں کرنا!
+	_ "go.mau.fi/whatsmeow"
 )
 
 func generateDocs() error {
@@ -23,7 +26,6 @@ func generateDocs() error {
 	fmt.Println("🚀 STEP 1: واٹس میو کے تمام پیکجز تلاش کیے جا رہے ہیں...")
 	fmt.Println("🚀 ----------------------------------------------------")
 
-	// 1. پیکجز کی لسٹ نکالنا (ساتھ میں ایرر کیپچر کرنا)
 	cmdList := exec.Command("go", "list", "go.mau.fi/whatsmeow/...")
 	var listErr bytes.Buffer
 	cmdList.Stderr = &listErr
@@ -48,7 +50,6 @@ func generateDocs() error {
 	fmt.Println("🚀 STEP 2: ہر پیکج کے فنکشنز ایکسٹریکٹ کیے جا رہے ہیں...")
 	fmt.Println("🚀 ----------------------------------------------------\n")
 
-	// 2. ہر پیکج پر لوپ لگانا اور ڈیٹا نکالنا
 	for i, pkg := range packages {
 		pkg = strings.TrimSpace(pkg)
 		if pkg == "" {
@@ -64,16 +65,14 @@ func generateDocs() error {
 
 		if err != nil {
 			fmt.Printf("  ❌ فیل ہو گیا! ایرر: %v\n", err)
-			fmt.Printf("  ❌ وجہ (STDERR): %s\n", docErr.String())
 			continue
 		}
 
 		if len(outputDoc) == 0 {
-			fmt.Printf("  ⚠️ کوئی پبلک فنکشن یا سٹرکچر نہیں ملا اس پیکج میں۔\n")
+			fmt.Printf("  ⚠️ کوئی پبلک فنکشن یا سٹرکچر نہیں ملا۔\n")
 		} else {
 			fmt.Printf("  ✅ کامیابی! اس پیکج سے %d بائٹس کا ڈیٹا نکالا گیا۔\n", len(outputDoc))
 			
-			// فائل میں لکھنا
 			file.WriteString("========================================================\n")
 			file.WriteString(fmt.Sprintf("PACKAGE: %s\n", pkg))
 			file.WriteString("========================================================\n\n")
@@ -91,22 +90,19 @@ func main() {
 	fmt.Println("   WHATSMEOW EXTRACTOR SERVER STARTING...        ")
 	fmt.Println("=================================================")
 
-	// فنکشنز ایکسٹریکٹ کرنا سٹارٹ کریں
 	if err := generateDocs(); err != nil {
-		fmt.Printf("\n🚨 خطرہ: ڈاکیومنٹیشن جنریٹ کرنے میں بڑا مسئلہ آ گیا: %v\n", err)
+		fmt.Printf("\n🚨 خطرہ: ڈاکیومنٹیشن جنریٹ کرنے میں مسئلہ آ گیا: %v\n", err)
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// فائل کو ریڈ کرنا
 		content, err := os.ReadFile("whatsmeow_full_functions.txt")
 		
-		// اگر فائل موجود نہیں یا بالکل خالی ہے
 		if err != nil || len(content) == 0 {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			fmt.Fprintf(w, `
 				<body style="background:#1e1e1e; color:red; font-family:Arial; text-align:center; padding-top:50px;">
 					<h2>🚨 Error: File is empty or not generated yet!</h2>
-					<p>پلیز Railway کے لاگز (Logs) چیک کریں کہ کیا مسئلہ آیا ہے۔</p>
+					<p>پلیز Railway کے لاگز چیک کریں کہ کیا مسئلہ آیا ہے۔</p>
 				</body>
 			`)
 			return
