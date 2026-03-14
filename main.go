@@ -72,22 +72,27 @@ func main() {
 	http.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Download requested by browser...")
 		
-		// پوری فائل کو میموری میں ریڈ کرنا
-		fileBytes, err := os.ReadFile("whatsmeow_full_functions.txt")
-		if err != nil {
-			http.Error(w, "File not found or still generating", http.StatusInternalServerError)
-			log.Printf("Download error: %v", err)
+		filePath := "whatsmeow_full_functions.txt"
+		
+		// چیک کریں کہ فائل موجود ہے یا نہیں
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			http.Error(w, "File not found", http.StatusNotFound)
 			return
 		}
 
+		// ہیڈرز جو کلاؤڈ پراکسیز (جیسے Railway) اور کروم پر مسئلہ نہیں کرتے
 		w.Header().Set("Content-Disposition", "attachment; filename=whatsmeow_full_functions.txt")
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		// براؤزر اور ریلوے سرور کو ایگزیکٹ سائز بتانا تاکہ کنکشن ڈراپ نہ ہو
-		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(fileBytes)))
+		// اسے ٹیکسٹ کی بجائے راؤ ڈیٹا کے طور پر بھیجیں تاکہ کمپریشن کا مسئلہ نہ آئے
+		w.Header().Set("Content-Type", "application/octet-stream")
+		// کیشے کو ڈس ایبل کریں
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
 
-		// ڈائریکٹ بائٹس سینڈ کرنا
-		w.Write(fileBytes)
-		fmt.Println("Download completed successfully!")
+		// Go کا بلٹ ان فنکشن جو سٹریمنگ اور سائز کو خود ہینڈل کرے گا
+		http.ServeFile(w, r, filePath)
+		
+		fmt.Println("File sent to proxy successfully!")
 	})
 
 	port := os.Getenv("PORT")
